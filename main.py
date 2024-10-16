@@ -1,11 +1,17 @@
-from PySide6.QtWidgets import QApplication, QPushButton, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QPushButton, QMainWindow, QLabel, 
+QVBoxLayout, QHBoxLayout, QWidget, QDialog, QLineEdit)
 from PySide6.QtCore import Slot, Qt
+from PySide6 import QtGui, QtWidgets, QtCore
 import psutil
+import datetime
+import sys
 
+#Creating the main window
 class HeimdallWindow(QMainWindow):
     def __init__(self):
        super().__init__()
 
+       #Setting title and dimensions of the displayed window
        self.setWindowTitle("Heimdall")
        self.setGeometry(400, 400, 450, 450)
 
@@ -57,6 +63,85 @@ class HeimdallWindow(QMainWindow):
                     self.program_detected.setText(f"Detected program: {program}")
                     counter += 1
 
+#Work in Progress, table of habits
+
+#Creating the table
+class HabitTable(QtCore.QAbstractTableModel):
+    def __init__(self, data):
+        super(HabitTable, self).__init__()
+        self._data = data
+        self.headers = ['Habit name', 'Completed?', 'Streak', 'Started']
+
+    def data(self, index, role):
+        if role == Qt.ItemDataRole.DisplayRole:
+            cell_value = self._data[index.row()][index.column()]
+            
+            #Converting date values in cells to d-m-Y format
+            if isinstance(cell_value, datetime):
+                return cell_value.strftime ("%d-%m-%Y")
+            
+            return cell_value    
+        
+        #Changing the text color of cells with value 0
+        if role == Qt.ItemDataRole.ForegroundRole:
+            cell_value = self._data[index.row()][index.column()]
+            if (isinstance(cell_value, int)) and cell_value == 0:
+                return QtGui.QColor('red')
+
+        return cell_value
+
+    def rowCount(self, index):
+        return len(self._data)
+    
+    def columnCount(self, index):
+        return len(self._data[0])
+    
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.headers[section]
+        return super().headerData(section, orientation, role)
+
+#Temporary data structure for habits list
+habits_data = [
+          ["Reading", True, 9, datetime(2021,11,1)],
+          ["Watching",True, 0, datetime(2017,10,1)],
+          ["Programming",False, 8, datetime(2017,10,1)],
+        ]
+
+#Creating the window with the table
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.table = QtWidgets.QTableView()
+        self.model = HabitTable(habits_data)
+        self.table.setModel(self.model)
+        self.setCentralWidget(self.table)
+
+#Creating the popup with the prompt for name of new habit.
+class add_habit_dialog(QDialog):
+    def __init__(self, parent=None):
+        super(add_habit_dialog, self).__init__(parent)
+        self.edit = QLineEdit("Enter new habit name")
+        self.button = QPushButton("Add to the table")
+        heimdall_layout = QVBoxLayout()
+        heimdall_layout.addWidget(self.edit)
+        heimdall_layout.addWidget(self.button)
+        self.setLayout(heimdall_layout)
+        self.button.clicked.connect(self.table_add_habit)
+
+    #Function to add new habit, with current date as a starting date
+    def table_add_habit(self):
+        completition = False
+        habit_name = self.edit.text()
+        #TODO STREAK HISTORY
+        streak = 0
+        start_date = datetime.now().date()
+        habits_data.append([habit_name, completition, streak, start_date])
+        
+    
+
+
 #Executing the interface
 if __name__ == "__main__":        
 
@@ -64,6 +149,15 @@ if __name__ == "__main__":
     window = HeimdallWindow()
     window.show()
     app.exec()
+
+    #Executing the habit table WiP
+    app_second=QtWidgets.QApplication(sys.argv)
+    window=MainWindow()
+    window.show()
+    habit_dialog = add_habit_dialog()
+    habit_dialog.show()
+    app_second.exec()
+    
 
 
 
