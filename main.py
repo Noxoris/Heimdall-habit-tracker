@@ -2,7 +2,8 @@ import sys, psutil
 from PySide6 import QtCore,QtGui, QtWidgets
 from PySide6.QtWidgets import (QPushButton, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QDialog, QLineEdit)
 from PySide6.QtCore import Slot, Signal, Qt
-from datetime import datetime
+from datetime import date
+#from windows_tools.installed_software import get_installed_software
 
 class HabitsTable(QtCore.QAbstractTableModel):
 
@@ -26,7 +27,7 @@ class HabitsTable(QtCore.QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole:
             cell_value = self._data[index.row()][index.column()]
                      
-            if isinstance(cell_value, datetime):
+            if isinstance(cell_value, date):
                 return cell_value.strftime("%d-%m-%Y")
             
             return cell_value
@@ -63,7 +64,7 @@ class HabitsTable(QtCore.QAbstractTableModel):
         self.data_changed.emit()
         self.rows_modified_signal.emit(list(self.modified_rows_set))
         self.modified_rows_set.clear()
-    
+
 class BlockedPrograms(QMainWindow):
     def __init__(self):
        super().__init__()
@@ -116,9 +117,9 @@ class BlockedPrograms(QMainWindow):
                     counter += 1
 
 habits_data = [
-    ["Reading", True, 9, datetime(2021,11,1)],
-    ["Watching",True, 0, datetime(2017,10,1)],
-    ["Programming",False, 8, datetime(2017,10,1)],
+    ["Reading", False, 9, date(2021,11,1)],
+    ["Watching",False, 0, date(2017,10,1)],
+    ["Programming",False, 8, date(2017,10,1)],
 ]
 
 class HeimdallWindow(QtWidgets.QMainWindow):
@@ -168,9 +169,10 @@ class HeimdallWindow(QtWidgets.QMainWindow):
         self.model = HabitsTable(habits_data)
         self.habits_table_widget = QtWidgets.QTableView()
         self.habits_table_widget.setModel(self.model)
-        
         habits_tab_layout.addWidget(self.habits_table_widget)
-        
+
+        self.habits_table_widget.selectionModel().selectionChanged.connect(self.bool_value_change)
+
         #Adds the "Add Habit" button below the table
         bottom_layout = QHBoxLayout()
         self.add_button = QPushButton("Add Habit")
@@ -180,12 +182,27 @@ class HeimdallWindow(QtWidgets.QMainWindow):
         #Create a widget for the bottom layout
         self.bottom_widget = QWidget()
         self.bottom_widget.setLayout(bottom_layout)
-        
+
         #Adds both table_widget and bottom_widget to the main layout
         habits_tab_layout.addWidget(self.habits_table_widget)
         habits_tab_layout.addWidget(self.bottom_widget)
         
         self.habits_tab.setLayout(habits_tab_layout)
+
+    #Changes the value of the cells in the "Completed?" column, after clicking
+    def bool_value_change (self, selected: QtCore.QItemSelection):
+        for index in selected.indexes():
+           column = index.column()
+           value = index.data()
+           row = index.row()
+
+           #Checks if the selected cell is in the "Completed?" column
+           if column == 1:             
+            new_value = not value
+            #Updates the cell with the new value, and updates the interface to display changes
+            habits_data[row][1] = new_value
+            self.model.update_row(row)   
+            return new_value          
 
     def show_add_habit(self):
         habit_dialog = add_habit_dialog(self)
@@ -206,7 +223,7 @@ class add_habit_dialog(QDialog):
     #Inserts new habit to the table, with custom text and today's date
     def table_add_habit(self):
         habit_name = self.edit.text()
-        start_date = datetime.now()
+        start_date = date.now()
         habits_data.append([habit_name, False, 0, start_date])
         self.parent().model.update_row(len(habits_data) - 1)
 
