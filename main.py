@@ -1,8 +1,11 @@
-import sys, psutil
+import sys, psutil, ctypes
 from PySide6 import QtCore,QtGui, QtWidgets
 from PySide6.QtWidgets import (QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QDialog, QLineEdit)
-from PySide6.QtCore import Slot, Signal, Qt
+from PySide6.QtCore import Slot, Signal, Qt, QThread
 from datetime import date
+from icoextract import IconExtractor
+from PIL import Image
+from time import sleep
 
 class HabitsTable(QtCore.QAbstractTableModel):
 
@@ -22,7 +25,7 @@ class HabitsTable(QtCore.QAbstractTableModel):
     def data(self, index, role):
         cell_value = None
 
-        #Displays data in cells
+        #Displays data in cells 
         if role == Qt.ItemDataRole.DisplayRole:
             cell_value = self._data[index.row()][index.column()]
 
@@ -31,7 +34,6 @@ class HabitsTable(QtCore.QAbstractTableModel):
                 return cell_value.strftime("%d-%m-%Y")
             
             return cell_value
-
         
         if role == Qt.ItemDataRole.ForegroundRole:
             cell_value = self._data[index.row()][index.column()]
@@ -45,7 +47,10 @@ class HabitsTable(QtCore.QAbstractTableModel):
         return len(self._data)
     
     def columnCount(self, index):
-        return len(self._data[0])
+        try:
+            return len(self._data[0])
+        except:
+            return 0
     
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
@@ -89,11 +94,11 @@ class BlockedPrograms(QtCore.QAbstractTableModel):
             cell_value = self._data[index.row()][index.column()]   
             return cell_value
 
-        #Sets the text color of items in the list which equal 0 or False
+        #Sets the text color of items in the list which values are False
         if role == Qt.ItemDataRole.ForegroundRole:
             cell_value = self._data[index.row()][index.column()]
             
-            if (isinstance(cell_value, int)) and cell_value == 0:
+            if (isinstance(cell_value, bool)) and cell_value == False:
                 return QtGui.QColor('red')
 
         return cell_value
@@ -102,7 +107,10 @@ class BlockedPrograms(QtCore.QAbstractTableModel):
         return len(self._data)
     
     def columnCount(self, index):
-        return len(self._data[0])
+        try:
+            return len(self._data[0])
+        except:
+            return 0
     
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
@@ -124,13 +132,13 @@ class BlockedPrograms(QtCore.QAbstractTableModel):
         self.modified_rows_set.clear()
 
 #Testing values    
-programs_data = [["Icon", "AIMP.exe", False]]
-
+programs_data = [['TEST', 'AIMP.exe', False]]
 habits_data = [
     ["Reading", False, 9, date(2021,11,1)],
     ["Watching",False, 0, date(2017,10,1)],
     ["Programming",False, 8, date(2017,10,1)],
 ]
+currently_blocked = ['AIMP.exe']
 
 class HeimdallWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -191,6 +199,8 @@ class HeimdallWindow(QtWidgets.QMainWindow):
         #Sets layout of the tab, that includes all items
         self.programs_tab.setLayout(programs_tab_layout)
 
+        self.programs_table_widget.selectionModel().selectionChanged.connect(self.bool_value_change)
+
     #Inserts HabitsTable functionality to the programs_tab
     def setup_habits_tab(self):
         habits_tab_layout = QVBoxLayout()
@@ -223,17 +233,28 @@ class HeimdallWindow(QtWidgets.QMainWindow):
     #Changes the value of the cells in the "Completed?" column, after clicking
     def bool_value_change (self, selected: QtCore.QItemSelection):
         for index in selected.indexes():
-           column = index.column()
-           value = index.data()
-           row = index.row()
+            column = index.column()
+            value = index.data()
+            row = index.row()
 
-           #Checks if the selected cell is in the "Completed?" column
-           if column == 1:             
-            new_value = not value
-            #Updates the cell with the new value, and updates the interface to display changes
-            habits_data[row][1] = new_value
-            self.model.update_row(row)   
-            return new_value          
+            #Checks if the selected cell is in the "Completed?" column of the habits table
+            if column == 1 and type(value) == bool:             
+                new_value = not value
+                #Updates the cell with the new value, and updates the interface to display changes
+                habits_data[row][1] = new_value
+                self.habits_model.update_row(row)  
+
+            #Checks if the selected cell is in the "Blocked?" column of the programs table
+            elif column == 2 and type(value) == bool:
+                new_value = not value
+                programs_data[row][2] = new_value
+                self.programs_model.update_row(row)
+
+                #Adds the programs toggled as "blocked" to the list of blocked programs
+                if new_value == True and programs_data[row][1] not in currently_blocked:
+                    currently_blocked.append(programs_data[row][1])
+                else:
+                    currently_blocked.remove(programs_data[row][1])
 
     #Functions to display windows used in adding values to the tables
     def show_add_habit(self):
@@ -310,38 +331,96 @@ class DetectProgramWindow(QWidget):
     @Slot()
     def detect_processes(self):
 
-        #Detecting all processes in the background and creating a set with only their names
-        old_processes = set()
-        for process in psutil.process_iter(['name']):
-            old_processes.add(process.info['name'])
+        #Detecting all processes in the background and creating a set with only their names and file name
+        old_processes:set = set()
+        for process in psutil.process_iter(['name', 'exe']):
+            old_processes.add((process.info['name'], process.info['exe']))
         
-        counter = 0
-        excluded_processes:list = ['smartscreen.exe', 'svchost.exe', 'dllhost.exe', 'docker.exe', 'conhost.exe', 'com.docker.cli.exe']
+        counter:int = 0
+        #List of background processes that can disrupt the process of detecting 
+        excluded_processes:list = ['smartscreen.exe', 'backgroundTaskHost.exe', 'svchost.exe', 
+                                   'dllhost.exe', 'docker.exe', 'conhost.exe', 'com.docker.cli.exe']
         
         #Scans for the first started process that is not on the excluded list
         while counter < 1:
             new_processes = set()
-            for process in psutil.process_iter(['name']):
-                new_processes.add(process.info['name'])
+            for process in psutil.process_iter(['name', 'exe']):
+                new_processes.add((process.info['name'], process.info['exe']))
 
             #Compares the sets of processes to find which are new
-            added: set = new_processes - old_processes
-
+            added: set = new_processes ^ old_processes
+            sleep(0.3)
             #Changes the text displayed to the name of the first program found
-            for program in added:
-                if program not in excluded_processes:
-                    self.program_name.setText(f"Detected program: {program}")
+            for program_name, program_path in added:
+                if program_name not in excluded_processes:
+                    self.program_name.setText(f"Detected program: {program_name}")
                     counter += 1
-                    self.program_to_add = program
-      
+                    self.program_to_add = program_name
+
+                    #Extracts the icon of the detected program
+                    extractor = IconExtractor(program_path)
+                    icon = extractor.get_icon(num=0)
+                    icon_to_png = Image.open(icon)
+
+                    #TODO Fix the image always saving as 256 x 256, change the location to program dir
+                    #Converts the icon to png
+                    icon_to_png.save(f"C:\\{program_name}.png", format='PNG', sizes=[(40, 40)])
+
+                    #WiP - Doesn't work   
+                    #self.label = QLabel()
+                    #self.label.setPixmap(f"C:\\{program_name}")
+
+    #Adds the program to the programs table
     def append_progam(self):
         programs_data.append(['TEST', self.program_to_add, False])
         self.parent.programs_model.update_row(len(programs_data) - 1)
 
+class ProcessKiler(QThread):
+    ended = Signal()
+
+    def __init__(self):
+        super().__init__()
+
+    def kill_blocked(self):
+        #Detecting all processes in the background and creating a set with only their names
+        background_processes:set = set()
+        for process in psutil.process_iter(['name']):
+            background_processes.add(process.info['name'])
+      
+        #Scans for the first started process
+        new_background_processes = set()
+        for process in psutil.process_iter(['name']):
+            new_background_processes.add(process.info['name'])
+
+            #Compares the sets of processes to find which are new
+            added: set = new_background_processes ^ background_processes
+
+            for proc in psutil.process_iter(['name']):
+                try:
+                    #Kills the process if the program is blocked
+                    if proc.info['name'] in currently_blocked:
+                        proc.kill()
+
+                        #Shows a windows error message
+                        ctypes.windll.user32.MessageBoxW(0, f"Sorry, the {proc.info['name']} is blocked. ", "Blocked program", 0x40000)
+                #If killing the process throws an error, the error is ignored
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+
+    #Runs the function as long as the program is working, with 2 seconds break between the cycles         
+    def run(self):
+        while True:
+            self.kill_blocked()
+            sleep(2)
         
 #Initializes the program        
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
+    #Starts the killing processes thread with the main program
+    killing_thread = ProcessKiler()
+    killing_thread.finished.connect(app.exit)
+    killing_thread.start()
+
     window = HeimdallWindow()
     window.show()
     sys.exit(app.exec())
