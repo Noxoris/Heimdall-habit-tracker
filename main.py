@@ -1,11 +1,14 @@
 import sys, psutil, ctypes
 from PySide6 import QtCore,QtGui, QtWidgets
-from PySide6.QtWidgets import (QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QDialog, QLineEdit)
+from PySide6.QtWidgets import (QPushButton, QLabel,QStyle, QVBoxLayout, QHBoxLayout, QMessageBox, QWidget, QDialog, QLineEdit)
 from PySide6.QtCore import Slot, Signal, Qt, QThread
 from datetime import date
 from icoextract import IconExtractor
 from PIL import Image
 from time import sleep
+from os import getcwd
+
+current_dir = getcwd()
 
 class HabitsTable(QtCore.QAbstractTableModel):
 
@@ -37,9 +40,24 @@ class HabitsTable(QtCore.QAbstractTableModel):
         
         if role == Qt.ItemDataRole.ForegroundRole:
             cell_value = self._data[index.row()][index.column()]
-            #Sets the text color of items in the list which equal 0    
-            if (isinstance(cell_value, int)) and cell_value == 0:
+
+            #Sets the text color of bool items depending on the value  
+            if isinstance(cell_value, bool):
+                if cell_value:
+                    return QtGui.QColor('green')
                 return QtGui.QColor('red')
+            return None
+        
+        #TODO make a function to reuse
+        #Adds a tick or cross alongside the bool value, depending on the value     
+        if role == QtCore.Qt.ItemDataRole.DecorationRole:
+            cell_value = self._data[index.row()][index.column()]
+            
+            if isinstance(cell_value, bool):
+                if cell_value:
+                    return QtGui.QIcon(rf"{current_dir}/icons/tick.svg")
+                return QtGui.QIcon(rf"{current_dir}/icons/cross.svg")
+            return None
 
         return cell_value
 
@@ -47,6 +65,7 @@ class HabitsTable(QtCore.QAbstractTableModel):
         return len(self._data)
     
     def columnCount(self, index):
+        #Try except block ensures the correct display even when the list is empty
         try:
             return len(self._data[0])
         except:
@@ -70,6 +89,7 @@ class HabitsTable(QtCore.QAbstractTableModel):
         self.rows_modified_signal.emit(list(self.modified_rows_set))
         self.modified_rows_set.clear()
 
+#TODO scaling table with data
 class BlockedPrograms(QtCore.QAbstractTableModel):
 
     #Variables needed to control what rows were changed
@@ -86,6 +106,7 @@ class BlockedPrograms(QtCore.QAbstractTableModel):
        #Stores the indices of rows that have been modified 
        self.modified_rows_set = set()
 
+    #TODO only an icon in the boolean field, or a yes/no besides
     def data(self, index, role):
         cell_value = None
 
@@ -97,16 +118,34 @@ class BlockedPrograms(QtCore.QAbstractTableModel):
         #Sets the text color of items in the list which values are False
         if role == Qt.ItemDataRole.ForegroundRole:
             cell_value = self._data[index.row()][index.column()]
-            
-            if (isinstance(cell_value, bool)) and cell_value == False:
-                return QtGui.QColor('red')
 
+            #Sets the text color of bool items depending on the value  
+            if isinstance(cell_value, bool):
+                if cell_value:
+                    return QtGui.QColor('green')
+                return QtGui.QColor('red')
+            return None
+        
+        #Adds a tick or cross alongside the bool value, depending on the value   
+        if role == QtCore.Qt.ItemDataRole.DecorationRole:
+            cell_value = self._data[index.row()][index.column()]
+
+            if isinstance(cell_value, QtWidgets.QLabel):
+                return cell_value.pixmap()
+            
+            if isinstance(cell_value, bool):
+                if cell_value:
+                    return QtGui.QIcon(rf"{current_dir}/icons/tick.svg")
+                return QtGui.QIcon(rf"{current_dir}/icons/cross.svg")
+            return None
+        
         return cell_value
 
     def rowCount(self, index):
         return len(self._data)
     
     def columnCount(self, index):
+        #Try except block ensures the correct display even when the list is empty
         try:
             return len(self._data[0])
         except:
@@ -343,6 +382,7 @@ class DetectProgramWindow(QWidget):
         
         #Scans for the first started process that is not on the excluded list
         while counter < 1:
+            self.program_name.setText("Detecting now, please start the app you want to add.")
             new_processes = set()
             for process in psutil.process_iter(['name', 'exe']):
                 new_processes.add((process.info['name'], process.info['exe']))
@@ -362,19 +402,28 @@ class DetectProgramWindow(QWidget):
                     icon = extractor.get_icon(num=0)
                     icon_to_png = Image.open(icon)
 
-                    #TODO Fix the image always saving as 256 x 256, change the location to program dir
+                    
                     #Converts the icon to png
-                    icon_to_png.save(f"C:\\{program_name}.png", format='PNG', sizes=[(40, 40)])
+                    icon_to_png = icon_to_png.resize((40,40))
+                    icon_to_png.save(rf"{current_dir}/icons/{program_name}.png", format='PNG')
 
-                    #WiP - Doesn't work   
-                    #self.label = QLabel()
-                    #self.label.setPixmap(f"C:\\{program_name}")
+                    #Sets the icon as the image extracted from the process 
+                    self.label = QLabel()
+                    pixmap = QtGui.QPixmap(rf"{current_dir}/icons/{program_name}.png")
+                    self.label.setPixmap(pixmap)
+
 
     #Adds the program to the programs table
     def append_progam(self):
-        programs_data.append(['TEST', self.program_to_add, False])
-        self.parent.programs_model.update_row(len(programs_data) - 1)
+        #TODO add checking if the program is in the table
 
+        if self.program_to_add not in programs_data:  
+            programs_data.append([self.label, self.program_to_add, False])
+            self.parent.programs_model.update_row(len(programs_data) - 1)
+        else:
+            ctypes.windll.user32.MessageBoxW(0, f"The {self.program_to_add} is already added. ", "Adding program", 0x40000)
+
+#TODO reimplement the background thread, so the program won't freeze for a second
 class ProcessKiler(QThread):
     ended = Signal()
 
@@ -401,6 +450,12 @@ class ProcessKiler(QThread):
                     if proc.info['name'] in currently_blocked:
                         proc.kill()
 
+                        
+                        #TODO change for custom window
+                        #WiP custom window
+                        #msg_window = MessageWindow("Error!", f"Sorry, the {proc.info['name']} is blocked. ")
+                        #msg_window.show()
+
                         #Shows a windows error message
                         ctypes.windll.user32.MessageBoxW(0, f"Sorry, the {proc.info['name']} is blocked. ", "Blocked program", 0x40000)
                 #If killing the process throws an error, the error is ignored
@@ -412,7 +467,19 @@ class ProcessKiler(QThread):
         while True:
             self.kill_blocked()
             sleep(2)
-        
+
+#WiP custom alert
+class MessageWindow(QtWidgets.QMainWindow):
+    def __init__(self, error_header, error_text):
+        super().__init__()
+        self.setWindowTitle(error_header)
+        self.setGeometry(450, 400, 350, 150)
+        msg_box = QMessageBox(self)
+        msg_box.setText = QLabel(error_text, alignment=Qt.AlignCenter)
+        button = msg_box.exec()
+        if button == QMessageBox.StandardButton.Ok:
+            print("OK!")
+
 #Initializes the program        
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
