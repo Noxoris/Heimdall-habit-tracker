@@ -1,12 +1,13 @@
 import sys, psutil, ctypes
 from PySide6 import QtCore,QtGui, QtWidgets
-from PySide6.QtWidgets import (QPushButton, QLabel,QStyle, QVBoxLayout, QHBoxLayout, QMessageBox, QWidget, QDialog, QLineEdit)
+from PySide6.QtWidgets import (QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QWidget, QDialog, QLineEdit)
 from PySide6.QtCore import Slot, Signal, Qt, QThread
 from datetime import date
 from icoextract import IconExtractor
 from PIL import Image
 from time import sleep
 from os import getcwd
+from io import BytesIO
 
 current_dir = getcwd()
 
@@ -49,14 +50,15 @@ class HabitsTable(QtCore.QAbstractTableModel):
             return None
         
         #TODO make a function to reuse
-        #Adds a tick or cross alongside the bool value, depending on the value     
+           
         if role == QtCore.Qt.ItemDataRole.DecorationRole:
             cell_value = self._data[index.row()][index.column()]
-            
+
+            #Adds a tick or cross alongside the bool value, depending on the value  
             if isinstance(cell_value, bool):
                 if cell_value:
-                    return QtGui.QIcon(rf"{current_dir}/icons/tick.svg")
-                return QtGui.QIcon(rf"{current_dir}/icons/cross.svg")
+                    return QtGui.QIcon(rf"{current_dir}/data/icons/tick.svg")
+                return QtGui.QIcon(rf"{current_dir}/data/icons/cross.svg")
             return None
 
         return cell_value
@@ -126,17 +128,19 @@ class BlockedPrograms(QtCore.QAbstractTableModel):
                 return QtGui.QColor('red')
             return None
         
-        #Adds a tick or cross alongside the bool value, depending on the value   
+         
         if role == QtCore.Qt.ItemDataRole.DecorationRole:
             cell_value = self._data[index.row()][index.column()]
 
+            #Makes sure the pixmap are displayed correctly
             if isinstance(cell_value, QtWidgets.QLabel):
                 return cell_value.pixmap()
-            
+
+            #Adds a tick or cross alongside the bool value, depending on the value  
             if isinstance(cell_value, bool):
                 if cell_value:
-                    return QtGui.QIcon(rf"{current_dir}/icons/tick.svg")
-                return QtGui.QIcon(rf"{current_dir}/icons/cross.svg")
+                    return QtGui.QIcon(rf"{current_dir}/data/icons/tick.svg")
+                return QtGui.QIcon(rf"{current_dir}/data/icons/cross.svg")
             return None
         
         return cell_value
@@ -189,17 +193,17 @@ class HeimdallWindow(QtWidgets.QMainWindow):
         self.tab_widget = QtWidgets.QTabWidget()
         
         #Creates three empty tabs
-        self.empty_tab1 = QWidget()
-        self.empty_tab2 = QWidget()
+        self.settings = QWidget()
+        self.sites_tab = QWidget()
         self.programs_tab = QWidget()
         self.habits_tab = QWidget()
         
         #Adds tabs to the tab widget
-        self.tab_widget.addTab(self.empty_tab1, "Empty Tab 1")
-        self.tab_widget.addTab(self.empty_tab2, "Empty Tab 2") 
+        self.tab_widget.addTab(self.habits_tab, "Habits Table")
         self.tab_widget.addTab(self.programs_tab, "Blocked programs")
-        self.tab_widget.addTab(self.habits_tab, "Habit Table")
-
+        self.tab_widget.addTab(self.sites_tab, "Blocked websites") 
+        self.tab_widget.addTab(self.settings, "Settings") 
+        
         #Sets up the table tabs content
         self.setup_programs_tab()
         self.setup_habits_tab()
@@ -215,6 +219,8 @@ class HeimdallWindow(QtWidgets.QMainWindow):
         self.programs_model = BlockedPrograms(programs_data)       
         self.programs_table_widget = QtWidgets.QTableView()
         self.programs_table_widget.setModel(self.programs_model)
+        self.programs_table_widget.resizeColumnsToContents()
+        self.programs_table_widget.resizeRowsToContents()
         programs_tab_layout.addWidget(self.programs_table_widget)
     
         #Adds the BlockedPrograms into the main layout
@@ -226,6 +232,10 @@ class HeimdallWindow(QtWidgets.QMainWindow):
         self.detect_button = QPushButton("Detect program")
         self.detect_button.clicked.connect(self.show_detect_window)
         button_layout.addWidget(self.detect_button)
+
+        self.program_list_button = QPushButton("List of running programs")
+        self.program_list_button.clicked.connect(self.show_program_list)
+        button_layout.addWidget(self.program_list_button)
 
         #Create a widget for the button layout
         self.button_widget = QWidget()
@@ -248,6 +258,7 @@ class HeimdallWindow(QtWidgets.QMainWindow):
         self.habits_model = HabitsTable(habits_data)
         self.habits_table_widget = QtWidgets.QTableView()
         self.habits_table_widget.setModel(self.habits_model)
+        self.habits_table_widget.resizeColumnsToContents()
         habits_tab_layout.addWidget(self.habits_table_widget)
 
         self.habits_table_widget.selectionModel().selectionChanged.connect(self.bool_value_change)
@@ -297,9 +308,13 @@ class HeimdallWindow(QtWidgets.QMainWindow):
 
     #Functions to display windows used in adding values to the tables
     def show_add_habit(self):
-        AddHabitDialog(self).show()
+        self.window = AddHabitDialog(self)
+        self.window.show()
     def show_detect_window(self):
         self.window = DetectProgramWindow(self)
+        self.window.show()
+    def show_program_list(self):
+        self.window = ProgramsListWindow(self)
         self.window.show()
 
 #Creates a dialog to add new habit and appends it into the table
@@ -402,21 +417,18 @@ class DetectProgramWindow(QWidget):
                     icon = extractor.get_icon(num=0)
                     icon_to_png = Image.open(icon)
 
-                    
                     #Converts the icon to png
                     icon_to_png = icon_to_png.resize((40,40))
-                    icon_to_png.save(rf"{current_dir}/icons/{program_name}.png", format='PNG')
+                    icon_to_png.save(rf"{current_dir}/data/icons/programs/{program_name}.png", format='PNG')
 
                     #Sets the icon as the image extracted from the process 
                     self.label = QLabel()
-                    pixmap = QtGui.QPixmap(rf"{current_dir}/icons/{program_name}.png")
+                    pixmap = QtGui.QPixmap(rf"{current_dir}/data/icons/programs/{program_name}.png")
                     self.label.setPixmap(pixmap)
-
+                    print(self.label)
 
     #Adds the program to the programs table
     def append_progam(self):
-        #TODO add checking if the program is in the table
-
         if self.program_to_add not in programs_data:  
             programs_data.append([self.label, self.program_to_add, False])
             self.parent.programs_model.update_row(len(programs_data) - 1)
@@ -479,6 +491,143 @@ class MessageWindow(QtWidgets.QMainWindow):
         button = msg_box.exec()
         if button == QMessageBox.StandardButton.Ok:
             print("OK!")
+
+class ProgramsListWindow(QWidget):
+    
+    def __init__(self, parent = None):
+        super().__init__()
+        self.parent = parent
+        self.current_processes = CurrentProcesses()  
+        self.setWindowTitle("Heimdall - current programs")
+        
+        #TODO position % based rather than pixel
+        self.setGeometry(870, 400, 300, 300)
+        
+        #Creates the main layout and sets it
+        processes_layout = QVBoxLayout()
+        self.setLayout(processes_layout)
+        
+        #Creates a processes table and sets it's model
+        self.processes_model = CurrentProcesses()
+        self.processes_widget = QtWidgets.QTableView()
+        self.processes_widget.setModel(self.processes_model)
+        processes_layout.addWidget(self.processes_widget)
+
+        self.processes_widget.resizeColumnsToContents()
+        self.processes_widget.resizeRowsToContents()
+
+        #Creates a layout and a button
+        bottom_layout = QHBoxLayout()
+        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.clicked.connect(self.refresh_clicked)
+
+        #Adds the button to the layout
+        bottom_layout.addWidget(self.refresh_button)
+        processes_layout.addLayout(bottom_layout)
+
+        #Sets the button layout
+        self.setLayout(bottom_layout)
+
+    #Triggers refresh after clicking
+    def refresh_clicked(self):
+        self.current_processes.refresh_list()
+
+
+class CurrentProcesses(QtCore.QAbstractTableModel):
+
+    def __init__(self):
+        super(CurrentProcesses, self).__init__()
+        currently_running = self.now_running()
+        self._data = currently_running
+        self.headers = ['Add?','Icon', 'Name']
+
+    #TODO Fix running twice
+    def now_running(self):
+        running = set()
+        running_list = []
+
+        #Used to prevent displaying programs which if blocked could cause more "serious" issues ex. windows file explorer
+        excluded_list=['explorer.exe']
+
+        for process in psutil.process_iter(['name', 'exe']):
+            running.add((process.info['name'], process.info['exe']))
+
+        for program_name, program_path in running:
+            #Extracts the icon of the detected program
+            try:
+                extractor = IconExtractor(program_path)
+            except:
+                continue
+            icon = extractor.get_icon(num=0)
+            icon_to_png = Image.open(icon)
+
+            #Converts the icon to png
+            icon_to_png = icon_to_png.resize((40,40))
+
+            #Uses BytesIo to store the image in the buffer as the PNG
+            icon_bytes = BytesIO()
+            icon_to_png.save(icon_bytes, format='PNG')
+            icon_bytes.seek(0)
+
+            #Sets the icon as the image extracted from the process 
+            self.label = QLabel()
+            pixmap = QtGui.QPixmap()
+
+            #Loads the image from the buffer
+            pixmap.loadFromData(icon_bytes.getvalue())
+
+            self.label.setPixmap(pixmap)
+            if program_name not in excluded_list:
+                running_list.append([False, self.label, program_name])
+
+        #Sorts the list alphabetically ascending based on the name column        
+        running_list.sort(key = lambda x: x[2])
+        return running_list
+    
+    def data(self, index, role):
+        cell_value = None
+
+        #Displays data in cells 
+        if role == Qt.ItemDataRole.DisplayRole:
+            cell_value = self._data[index.row()][index.column()]
+            
+            return cell_value
+        
+        if role == Qt.ItemDataRole.ForegroundRole:
+            cell_value = self._data[index.row()][index.column()]
+
+            return cell_value
+        
+        if role == QtCore.Qt.ItemDataRole.DecorationRole:
+            cell_value = self._data[index.row()][index.column()]
+
+            #Makes sure the pixmap are displayed correctly
+            if isinstance(cell_value, QtWidgets.QLabel):
+                return cell_value.pixmap()
+            
+    #WiP not working
+    def refresh_list(self):
+        refresh = self.now_running()
+        self.beginResetModel()
+        self._data = refresh
+        self.endResetModel()
+
+
+    def rowCount(self, index):
+        return len(self._data)
+    
+    def columnCount(self, index):
+        #Try except block ensures the correct display even when the list is empty
+        try:
+            return len(self._data[0])
+        except:
+            return 0
+    
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.headers[section]
+        return super().headerData(section, orientation, role)   
+
 
 #Initializes the program        
 if __name__ == '__main__':
