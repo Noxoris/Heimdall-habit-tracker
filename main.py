@@ -530,8 +530,9 @@ class ProgramsListWindow(QWidget):
 
     #Triggers refresh after clicking
     def refresh_clicked(self):
-        self.current_processes.refresh_list()
-
+        self.processes_model.beginResetModel
+        self.processes_model.refresh_list()
+        self.processes_model.endResetModel
 
 class CurrentProcesses(QtCore.QAbstractTableModel):
 
@@ -545,7 +546,7 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
     def now_running(self):
         running = set()
         running_list = []
-
+    
         #Used to prevent displaying programs which if blocked could cause more "serious" issues ex. windows file explorer
         excluded_list=['explorer.exe']
 
@@ -581,12 +582,12 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
                 running_list.append([False, self.label, program_name])
 
         #Sorts the list alphabetically ascending based on the name column        
-        running_list.sort(key = lambda x: x[2])
+        running_list.sort(key = lambda x: x[2])    
         return running_list
     
     def data(self, index, role):
         cell_value = None
-
+        
         #Displays data in cells 
         if role == Qt.ItemDataRole.DisplayRole:
             cell_value = self._data[index.row()][index.column()]
@@ -604,15 +605,10 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
             #Makes sure the pixmap are displayed correctly
             if isinstance(cell_value, QtWidgets.QLabel):
                 return cell_value.pixmap()
-            
-    #WiP not working
+
     def refresh_list(self):
-        refresh = self.now_running()
-        self.beginResetModel()
-        self._data = refresh
-        self.endResetModel()
-
-
+        self._data = self.now_running()
+        
     def rowCount(self, index):
         return len(self._data)
     
@@ -627,7 +623,6 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self.headers[section]
         return super().headerData(section, orientation, role)   
-
 
 #Initializes the program        
 if __name__ == '__main__':
