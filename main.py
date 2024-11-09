@@ -11,178 +11,17 @@ from io import BytesIO
 
 current_dir = getcwd()
 
-class HabitsTable(QtCore.QAbstractTableModel):
+#TODO 
+# % based window size based rather than pixel
+#create an update class to reuse the code
+#custom window for error messages
+#Fix the now_running function starting twice
+#Ignore program button to the programs tab
+#make a function to reuse adding tick / cross to boolean
+#only an icon in the boolean field, or a yes/no besides
+#reimplement the background thread, so the program won't freeze for a second
 
-    #Variables needed to control what rows were changed
-    #rows_modified_signal emits a list of rows that have been modified
-    data_changed = Signal()
-    rows_modified_signal = Signal(list)
-
-    def __init__(self, data):
-        super(HabitsTable, self).__init__()
-        self._data = data
-        self.headers = ['Habit name', 'Completed?', 'Streak', 'Started']
-
-        #Stores the indices of rows that have been modified
-        self.modified_rows_set = set()
-
-    def data(self, index, role):
-        cell_value = None
-
-        #Displays data in cells 
-        if role == Qt.ItemDataRole.DisplayRole:
-            cell_value = self._data[index.row()][index.column()]
-
-            #Formats date in the table to %d-%m-%Y         
-            if isinstance(cell_value, date):
-                return cell_value.strftime("%d-%m-%Y")
-            
-            return cell_value
-        
-        if role == Qt.ItemDataRole.ForegroundRole:
-            cell_value = self._data[index.row()][index.column()]
-
-            #Sets the text color of bool items depending on the value  
-            if isinstance(cell_value, bool):
-                if cell_value:
-                    return QtGui.QColor('green')
-                return QtGui.QColor('red')
-            return None
-        
-        #TODO make a function to reuse
-           
-        if role == QtCore.Qt.ItemDataRole.DecorationRole:
-            cell_value = self._data[index.row()][index.column()]
-
-            #Adds a tick or cross alongside the bool value, depending on the value  
-            if isinstance(cell_value, bool):
-                if cell_value:
-                    return QtGui.QIcon(rf"{current_dir}/data/icons/tick.svg")
-                return QtGui.QIcon(rf"{current_dir}/data/icons/cross.svg")
-            return None
-
-        return cell_value
-
-    def rowCount(self, index):
-        return len(self._data)
-    
-    def columnCount(self, index):
-        #Try except block ensures the correct display even when the list is empty
-        try:
-            return len(self._data[0])
-        except:
-            return 0
-    
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return self.headers[section]
-        return super().headerData(section, orientation, role)   
-
-    #Functions to update display after the table was modified
-    def update_row(self, row_index):
-        self.beginResetModel()
-        self._data[row_index] = self._data[row_index]
-        self.endResetModel()
-        self.modified_rows_set.clear()
-        self.emit_data_changed()
-
-    def emit_data_changed(self):
-        self.data_changed.emit()
-        self.rows_modified_signal.emit(list(self.modified_rows_set))
-        self.modified_rows_set.clear()
-
-#TODO scaling table with data
-class BlockedPrograms(QtCore.QAbstractTableModel):
-
-    #Variables needed to control what rows were changed
-    #rows_modified_signal emits a list of rows that have been modified
-    data_changed = Signal()
-    rows_modified_signal = Signal(list)
-
-    def __init__(self, data):
-       super().__init__()
-       self._data = data
-       self.headers = ['Icon', 'Name', 'Blocked?']
-
-       #TODO create an update class to reuse the code
-       #Stores the indices of rows that have been modified 
-       self.modified_rows_set = set()
-
-    #TODO only an icon in the boolean field, or a yes/no besides
-    def data(self, index, role):
-        cell_value = None
-
-        #Displays data in cells
-        if role == Qt.ItemDataRole.DisplayRole:
-            cell_value = self._data[index.row()][index.column()]   
-            return cell_value
-
-        #Sets the text color of items in the list which values are False
-        if role == Qt.ItemDataRole.ForegroundRole:
-            cell_value = self._data[index.row()][index.column()]
-
-            #Sets the text color of bool items depending on the value  
-            if isinstance(cell_value, bool):
-                if cell_value:
-                    return QtGui.QColor('green')
-                return QtGui.QColor('red')
-            return None
-        
-         
-        if role == QtCore.Qt.ItemDataRole.DecorationRole:
-            cell_value = self._data[index.row()][index.column()]
-
-            #Makes sure the pixmap are displayed correctly
-            if isinstance(cell_value, QtWidgets.QLabel):
-                return cell_value.pixmap()
-
-            #Adds a tick or cross alongside the bool value, depending on the value  
-            if isinstance(cell_value, bool):
-                if cell_value:
-                    return QtGui.QIcon(rf"{current_dir}/data/icons/tick.svg")
-                return QtGui.QIcon(rf"{current_dir}/data/icons/cross.svg")
-            return None
-        
-        return cell_value
-
-    def rowCount(self, index):
-        return len(self._data)
-    
-    def columnCount(self, index):
-        #Try except block ensures the correct display even when the list is empty
-        try:
-            return len(self._data[0])
-        except:
-            return 0
-    
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return self.headers[section]
-        return super().headerData(section, orientation, role)   
-    
-    #TODO create an update class to reuse the code
-    #Functions to update display after the table was modified
-    def update_row(self, row_index):
-        self.beginResetModel()
-        self._data[row_index] = self._data[row_index]
-        self.endResetModel()
-        self.modified_rows_set.clear()
-        self.emit_data_changed()
-
-    def emit_data_changed(self):
-        self.data_changed.emit()
-        self.rows_modified_signal.emit(list(self.modified_rows_set))
-        self.modified_rows_set.clear()
-
-#Testing values    
-programs_data = [['TEST', 'AIMP.exe', False]]
-habits_data = [
-    ["Reading", False, 9, date(2021,11,1)],
-    ["Watching",False, 0, date(2017,10,1)],
-    ["Programming",False, 8, date(2017,10,1)],
-]
-currently_blocked = ['AIMP.exe']
-
+#Main window class.
 class HeimdallWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -317,7 +156,85 @@ class HeimdallWindow(QtWidgets.QMainWindow):
         self.window = ProgramsListWindow(self)
         self.window.show()
 
-#Creates a dialog to add new habit and appends it into the table
+class HabitsTable(QtCore.QAbstractTableModel):
+
+    #Variables needed to control what rows were changed
+    #rows_modified_signal emits a list of rows that have been modified
+    data_changed = Signal()
+    rows_modified_signal = Signal(list)
+
+    def __init__(self, data):
+        super(HabitsTable, self).__init__()
+        self._data = data
+        self.headers = ['Name', 'Completed?', 'Streak', 'Started']
+
+        #Stores the indices of rows that have been modified
+        self.modified_rows_set = set()
+
+    def data(self, index, role):
+        cell_value = None
+
+        #Displays data in cells 
+        if role == Qt.ItemDataRole.DisplayRole:
+            cell_value = self._data[index.row()][index.column()]
+
+            #Formats date in the table to %d-%m-%Y         
+            if isinstance(cell_value, date):
+                return cell_value.strftime("%d-%m-%Y")
+            
+            return cell_value
+        
+        if role == Qt.ItemDataRole.ForegroundRole:
+            cell_value = self._data[index.row()][index.column()]
+
+            #Sets the text color of bool items depending on the value  
+            if isinstance(cell_value, bool):
+                if cell_value:
+                    return QtGui.QColor('green')
+                return QtGui.QColor('red')
+            return None
+           
+        if role == QtCore.Qt.ItemDataRole.DecorationRole:
+            cell_value = self._data[index.row()][index.column()]
+
+            #Adds a tick or cross alongside the bool value, depending on the value  
+            if isinstance(cell_value, bool):
+                if cell_value:
+                    return QtGui.QIcon(rf"{current_dir}/data/icons/tick.svg")
+                return QtGui.QIcon(rf"{current_dir}/data/icons/cross.svg")
+            return None
+
+        return cell_value
+
+    def rowCount(self, index):
+        return len(self._data)
+    
+    def columnCount(self, index):
+        #Try except block ensures the correct display even when the list is empty
+        try:
+            return len(self._data[0])
+        except:
+            return 0
+    
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.headers[section]
+        return super().headerData(section, orientation, role)   
+
+    #Functions to update display after the table was modified
+    def update_row(self, row_index):
+        self.beginResetModel()
+        self._data[row_index] = self._data[row_index]
+        self.endResetModel()
+        self.modified_rows_set.clear()
+        self.emit_data_changed()
+
+    def emit_data_changed(self):
+        self.data_changed.emit()
+        self.rows_modified_signal.emit(list(self.modified_rows_set))
+        self.modified_rows_set.clear()
+
+#Creates a dialog to add new habit and appends it into the table.
 class AddHabitDialog(QDialog):
     def __init__(self, parent=None):
         super(AddHabitDialog, self).__init__(parent)
@@ -345,6 +262,87 @@ class AddHabitDialog(QDialog):
         #Updates display after appending new values
         self.parent().habits_model.update_row(len(habits_data) - 1)
 
+#Table of blocked programs.
+class BlockedPrograms(QtCore.QAbstractTableModel):
+
+    #Variables needed to control what rows were changed
+    #rows_modified_signal emits a list of rows that have been modified
+    data_changed = Signal()
+    rows_modified_signal = Signal(list)
+
+    def __init__(self, data):
+       super().__init__()
+       self._data = data
+       self.headers = ['Icon', 'Name', 'Blocked?']
+
+       #Stores the indices of rows that have been modified 
+       self.modified_rows_set = set()
+
+    def data(self, index, role):
+        cell_value = None
+
+        #Displays data in cells
+        if role == Qt.ItemDataRole.DisplayRole:
+            cell_value = self._data[index.row()][index.column()]   
+            return cell_value
+
+        #Sets the text color of items in the list which values are False
+        if role == Qt.ItemDataRole.ForegroundRole:
+            cell_value = self._data[index.row()][index.column()]
+
+            #Sets the text color of bool items depending on the value  
+            if isinstance(cell_value, bool):
+                if cell_value:
+                    return QtGui.QColor('green')
+                return QtGui.QColor('red')
+            return None
+        
+         
+        if role == QtCore.Qt.ItemDataRole.DecorationRole:
+            cell_value = self._data[index.row()][index.column()]
+
+            #Makes sure the pixmap are displayed correctly
+            if isinstance(cell_value, QtWidgets.QLabel):
+                return cell_value.pixmap()
+
+            #Adds a tick or cross alongside the bool value, depending on the value  
+            if isinstance(cell_value, bool):
+                if cell_value:
+                    return QtGui.QIcon(rf"{current_dir}/data/icons/tick.svg")
+                return QtGui.QIcon(rf"{current_dir}/data/icons/cross.svg")
+            return None
+        
+        return cell_value
+
+    def rowCount(self, index):
+        return len(self._data)
+    
+    def columnCount(self, index):
+        #Try except block ensures the correct display even when the list is empty
+        try:
+            return len(self._data[0])
+        except:
+            return 0
+    
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+            return self.headers[section]
+        return super().headerData(section, orientation, role)   
+    
+    #Functions to update display after the table was modified
+    def update_row(self, row_index):
+        self.beginResetModel()
+        self._data[row_index] = self._data[row_index]
+        self.endResetModel()
+        self.modified_rows_set.clear()
+        self.emit_data_changed()
+
+    def emit_data_changed(self):
+        self.data_changed.emit()
+        self.rows_modified_signal.emit(list(self.modified_rows_set))
+        self.modified_rows_set.clear()
+
+#Adds programs to the list based on detecting newly started program.
 class DetectProgramWindow(QWidget):
     def __init__(self, parent = None):
         super().__init__()
@@ -352,7 +350,7 @@ class DetectProgramWindow(QWidget):
         self.parent = parent
         self.setWindowTitle("Heimdall - detecting programs")
 
-        #TODO position % based rather than pixel
+
         self.setGeometry(870, 400, 300, 300)
         
         #Sets layout and adds text that shows what program was detected
@@ -362,8 +360,6 @@ class DetectProgramWindow(QWidget):
         #Adds the text to the window layout
         window_layout.addWidget(self.program_name)
         self.setLayout(window_layout)
-
-        #TODO "Ignore program" button
        
         #Creates a button to trigger detection of programs and adds them to the table
         self.detect_button = QPushButton("Detect program")
@@ -435,63 +431,7 @@ class DetectProgramWindow(QWidget):
         else:
             ctypes.windll.user32.MessageBoxW(0, f"The {self.program_to_add} is already added. ", "Adding program", 0x40000)
 
-#TODO reimplement the background thread, so the program won't freeze for a second
-class ProcessKiler(QThread):
-    ended = Signal()
-
-    def __init__(self):
-        super().__init__()
-
-    def kill_blocked(self):
-        #Detecting all processes in the background and creating a set with only their names
-        background_processes:set = set()
-        for process in psutil.process_iter(['name']):
-            background_processes.add(process.info['name'])
-      
-        #Scans for the first started process
-        new_background_processes = set()
-        for process in psutil.process_iter(['name']):
-            new_background_processes.add(process.info['name'])
-
-            #Compares the sets of processes to find which are new
-            added: set = new_background_processes ^ background_processes
-
-            for proc in psutil.process_iter(['name']):
-                try:
-                    #Kills the process if the program is blocked
-                    if proc.info['name'] in currently_blocked:
-                        proc.kill()
-
-                        
-                        #TODO change for custom window
-                        #WiP custom window
-                        #msg_window = MessageWindow("Error!", f"Sorry, the {proc.info['name']} is blocked. ")
-                        #msg_window.show()
-
-                        #Shows a windows error message
-                        ctypes.windll.user32.MessageBoxW(0, f"Sorry, the {proc.info['name']} is blocked. ", "Blocked program", 0x40000)
-                #If killing the process throws an error, the error is ignored
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
-
-    #Runs the function as long as the program is working, with 2 seconds break between the cycles         
-    def run(self):
-        while True:
-            self.kill_blocked()
-            sleep(2)
-
-#WiP custom alert
-class MessageWindow(QtWidgets.QMainWindow):
-    def __init__(self, error_header, error_text):
-        super().__init__()
-        self.setWindowTitle(error_header)
-        self.setGeometry(450, 400, 350, 150)
-        msg_box = QMessageBox(self)
-        msg_box.setText = QLabel(error_text, alignment=Qt.AlignCenter)
-        button = msg_box.exec()
-        if button == QMessageBox.StandardButton.Ok:
-            print("OK!")
-
+#Adds programs to the list based on list of all running programs.
 class ProgramsListWindow(QWidget):
     
     def __init__(self, parent = None):
@@ -500,7 +440,6 @@ class ProgramsListWindow(QWidget):
         self.current_processes = CurrentProcesses()  
         self.setWindowTitle("Heimdall - current programs")
         
-        #TODO position % based rather than pixel
         self.setGeometry(870, 400, 300, 300)
         
         #Creates the main layout and sets it
@@ -534,6 +473,7 @@ class ProgramsListWindow(QWidget):
         self.processes_model.refresh_list()
         self.processes_model.endResetModel
 
+#Funtionality for ProgramsListWindow
 class CurrentProcesses(QtCore.QAbstractTableModel):
 
     def __init__(self):
@@ -542,7 +482,6 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
         self._data = currently_running
         self.headers = ['Add?','Icon', 'Name']
 
-    #TODO Fix running twice
     def now_running(self):
         running = set()
         running_list = []
@@ -623,6 +562,70 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self.headers[section]
         return super().headerData(section, orientation, role)   
+
+#Kills the blocked processes
+class ProcessKiler(QThread):
+    ended = Signal()
+
+    def __init__(self):
+        super().__init__()
+
+    def kill_blocked(self):
+        #Detecting all processes in the background and creating a set with only their names
+        background_processes:set = set()
+        for process in psutil.process_iter(['name']):
+            background_processes.add(process.info['name'])
+      
+        #Scans for the first started process
+        new_background_processes = set()
+        for process in psutil.process_iter(['name']):
+            new_background_processes.add(process.info['name'])
+
+            #Compares the sets of processes to find which are new
+            added: set = new_background_processes ^ background_processes
+
+            for proc in psutil.process_iter(['name']):
+                try:
+                    #Kills the process if the program is blocked
+                    if proc.info['name'] in currently_blocked:
+                        proc.kill()
+                       
+                        #WiP custom window
+                        #msg_window = MessageWindow("Error!", f"Sorry, the {proc.info['name']} is blocked. ")
+                        #msg_window.show()
+
+                        #Shows a windows error message
+                        ctypes.windll.user32.MessageBoxW(0, f"Sorry, the {proc.info['name']} is blocked. ", "Blocked program", 0x40000)
+                #If killing the process throws an error, the error is ignored
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    pass
+
+    #Runs the function as long as the program is working, with 2 seconds break between the cycles         
+    def run(self):
+        while True:
+            self.kill_blocked()
+            sleep(2)
+
+#WiP custom alert
+class MessageWindow(QtWidgets.QMainWindow):
+    def __init__(self, error_header, error_text):
+        super().__init__()
+        self.setWindowTitle(error_header)
+        self.setGeometry(450, 400, 350, 150)
+        msg_box = QMessageBox(self)
+        msg_box.setText = QLabel(error_text, alignment=Qt.AlignCenter)
+        button = msg_box.exec()
+        if button == QMessageBox.StandardButton.Ok:
+            print("OK!")
+
+#Testing values    
+programs_data = [['TEST', 'AIMP.exe', False]]
+habits_data = [
+    ["Reading", False, 9, date(2021,11,1)],
+    ["Watching",False, 0, date(2017,10,1)],
+    ["Programming",False, 8, date(2017,10,1)],
+]
+currently_blocked = ['AIMP.exe']
 
 #Initializes the program        
 if __name__ == '__main__':
