@@ -12,23 +12,19 @@ from io import BytesIO
 current_dir = getcwd()
 
 #TODO 
-# % based window size based rather than pixel
 #change the window size and position to current monitor
 #create an update class to reuse the code
 #custom window for error messages
 #Fix the line self.program_name.setText("Detecting now, please start the app you want to add.") not updating displayed message
-#Fix the now_running function starting twice
 #Ignore program button to the programs tab
-#make a function to reuse adding tick / cross to boolean
 #make a function to reuse geometry (?)
 #only an icon in the boolean field, or a yes/no besides
-#reimplement the background thread, so the program won't freeze for a second
-
+  
 #Main window class.
 class HeimdallWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-
+        
         #Sets window title, dimensions of the window and position where it appears
         self.setWindowTitle("Heimdall")
         
@@ -205,21 +201,15 @@ class HabitsTable(QtCore.QAbstractTableModel):
             cell_value = self._data[index.row()][index.column()]
 
             #Sets the text color of bool items depending on the value  
-            if isinstance(cell_value, bool):
-                if cell_value:
-                    return QtGui.QColor('green')
-                return QtGui.QColor('red')
-            return None
+            color = BoolTextAndIcon.bool_color(cell_value)
+            return color
            
         if role == QtCore.Qt.ItemDataRole.DecorationRole:
             cell_value = self._data[index.row()][index.column()]
 
             #Adds a tick or cross alongside the bool value, depending on the value  
-            if isinstance(cell_value, bool):
-                if cell_value:
-                    return QtGui.QIcon(rf"{current_dir}/data/icons/tick.svg")
-                return QtGui.QIcon(rf"{current_dir}/data/icons/cross.svg")
-            return None
+            self.icon_setter = BoolTextAndIcon.set_icon(cell_value)
+            return self.icon_setter
 
         return cell_value
 
@@ -279,6 +269,25 @@ class AddHabitDialog(QDialog):
         #Updates display after appending new values
         self.parent().habits_model.update_row(len(habits_data) - 1)
 
+#Sets displayed color and icon to boolean values in the tables.
+class BoolTextAndIcon():
+
+    def bool_color(value):
+    #Sets the text color of bool items depending on the value  
+        if isinstance(value, bool):
+            if value:
+                return QtGui.QColor('green')
+            return QtGui.QColor('red')
+        return None
+
+    #Adds a tick or cross alongside the bool value, depending on the value  
+    def set_icon(cell_value):
+        if isinstance(cell_value, bool):
+            if cell_value:
+                return QtGui.QIcon(f"{current_dir}/data/icons/tick.svg")
+            return QtGui.QIcon(f"{current_dir}/data/icons/cross.svg")
+        return None
+
 #Table of blocked programs.
 class BlockedPrograms(QtCore.QAbstractTableModel):
 
@@ -308,12 +317,8 @@ class BlockedPrograms(QtCore.QAbstractTableModel):
             cell_value = self._data[index.row()][index.column()]
 
             #Sets the text color of bool items depending on the value  
-            if isinstance(cell_value, bool):
-                if cell_value:
-                    return QtGui.QColor('green')
-                return QtGui.QColor('red')
-            return None
-        
+            color = BoolTextAndIcon.bool_color(cell_value)
+            return color
          
         if role == QtCore.Qt.ItemDataRole.DecorationRole:
             cell_value = self._data[index.row()][index.column()]
@@ -323,11 +328,8 @@ class BlockedPrograms(QtCore.QAbstractTableModel):
                 return cell_value.pixmap()
 
             #Adds a tick or cross alongside the bool value, depending on the value  
-            if isinstance(cell_value, bool):
-                if cell_value:
-                    return QtGui.QIcon(rf"{current_dir}/data/icons/tick.svg")
-                return QtGui.QIcon(rf"{current_dir}/data/icons/cross.svg")
-            return None
+            self.icon_setter = BoolTextAndIcon.set_icon(cell_value)
+            return self.icon_setter
         
         return cell_value
 
@@ -465,7 +467,6 @@ class ProgramsListWindow(QWidget):
     def __init__(self, parent = None):
         super().__init__()
         self.parent = parent
-        self.current_processes = CurrentProcesses()  
         self.setWindowTitle("Heimdall - current programs")
         
         #Gets the primary screen
@@ -525,7 +526,6 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
     def now_running(self):
         running = set()
         running_list = []
-    
         #Used to prevent displaying programs which if blocked could cause more "serious" issues ex. windows file explorer
         excluded_list=['explorer.exe']
 
@@ -561,9 +561,9 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
                 running_list.append([False, self.label, program_name])
 
         #Sorts the list alphabetically ascending based on the name column        
-        running_list.sort(key = lambda x: x[2])    
+        running_list.sort(key = lambda x: x[2])   
         return running_list
-    
+
     def data(self, index, role):
         cell_value = None
         
@@ -586,6 +586,8 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
                 return cell_value.pixmap()
 
     def refresh_list(self):
+        print(f"Refresh: {self.initialized}")
+        self.initialized = False
         self._data = self.now_running()
         
     def rowCount(self, index):
@@ -612,30 +614,21 @@ class ProcessKiler(QThread):
 
     def kill_blocked(self):
         #Detecting all processes in the background and creating a set with only their names
-        background_processes:set = set()
-        for process in psutil.process_iter(['name']):
-            background_processes.add(process.info['name'])
-      
-        #Scans for the first started process
-        new_background_processes = set()
-        for process in psutil.process_iter(['name']):
-            new_background_processes.add(process.info['name'])
-
-            for proc in psutil.process_iter(['name']):
-                try:
-                    #Kills the process if the program is blocked
-                    if proc.info['name'] in currently_blocked:
-                        proc.kill()
+        for proc in psutil.process_iter(['name']):
+            try:
+                #Kills the process if the program is blocked
+                if proc.info['name'] in currently_blocked:
+                    proc.kill()
                        
-                        #WiP custom window
-                        #msg_window = MessageWindow("Error!", f"Sorry, the {proc.info['name']} is blocked. ")
-                        #msg_window.show()
+                    #WiP custom window
+                    #msg_window = MessageWindow("Error!", f"Sorry, the {proc.info['name']} is blocked. ")
+                    #msg_window.show()
 
-                        #Shows a windows error message
-                        ctypes.windll.user32.MessageBoxW(0, f"Sorry, the {proc.info['name']} is blocked. ", "Blocked program", 0x40000)
-                #If killing the process throws an error, the error is ignored
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
+                    #Shows a windows error message
+                    ctypes.windll.user32.MessageBoxW(0, f"Sorry, the {proc.info['name']} is blocked. ", "Blocked program", 0x40000)
+            #If killing the process throws an error, the error is ignored
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
 
     #Runs the function as long as the program is working, with 2 seconds break between the cycles         
     def run(self):
@@ -667,6 +660,7 @@ currently_blocked = ['AIMP.exe']
 #Initializes the program        
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
+
     #Starts the killing processes thread with the main program
     killing_thread = ProcessKiler()
     killing_thread.finished.connect(app.exit)
