@@ -13,11 +13,14 @@ current_dir = getcwd()
 
 #TODO 
 # % based window size based rather than pixel
+#change the window size and position to current monitor
 #create an update class to reuse the code
 #custom window for error messages
+#Fix the line self.program_name.setText("Detecting now, please start the app you want to add.") not updating displayed message
 #Fix the now_running function starting twice
 #Ignore program button to the programs tab
 #make a function to reuse adding tick / cross to boolean
+#make a function to reuse geometry (?)
 #only an icon in the boolean field, or a yes/no besides
 #reimplement the background thread, so the program won't freeze for a second
 
@@ -28,7 +31,21 @@ class HeimdallWindow(QtWidgets.QMainWindow):
 
         #Sets window title, dimensions of the window and position where it appears
         self.setWindowTitle("Heimdall")
-        self.setGeometry(400, 400, 450, 450)
+        
+        #Gets the primary screen
+        screen = QtWidgets.QApplication.screens()[0]
+
+        #Calculates the position to show the window
+        position_x = int(screen.size().width() * 0.45)
+        position_y = int(screen.size().width() * 0.20)
+
+        #Calculates the size of the window
+        width_percent = int(screen.size().width() * 0.18)
+        height_percent = int(screen.size().height() * 0.30)
+        
+        #Sets the position and size of the window
+        self.setGeometry(position_x, position_y, width_percent, height_percent)
+
         self.tab_widget = QtWidgets.QTabWidget()
         
         #Creates three empty tabs
@@ -351,7 +368,19 @@ class DetectProgramWindow(QWidget):
         self.setWindowTitle("Heimdall - detecting programs")
 
 
-        self.setGeometry(870, 400, 300, 300)
+        #Gets the primary screen
+        screen = QtWidgets.QApplication.screens()[0]
+
+        #Calculates the position to show the window
+        position_x = int(screen.size().width() * 0.64)
+        position_y = int(screen.size().width() * 0.20)
+
+        #Calculates the size of the window
+        width_percent = int(screen.size().width() * 0.10)
+        height_percent = int(screen.size().height() * 0.20)
+
+        #Sets the position and size of the window
+        self.setGeometry(position_x, position_y, width_percent, height_percent)
         
         #Sets layout and adds text that shows what program was detected
         window_layout = QVBoxLayout()
@@ -421,7 +450,6 @@ class DetectProgramWindow(QWidget):
                     self.label = QLabel()
                     pixmap = QtGui.QPixmap(rf"{current_dir}/data/icons/programs/{program_name}.png")
                     self.label.setPixmap(pixmap)
-                    print(self.label)
 
     #Adds the program to the programs table
     def append_progam(self):
@@ -440,8 +468,20 @@ class ProgramsListWindow(QWidget):
         self.current_processes = CurrentProcesses()  
         self.setWindowTitle("Heimdall - current programs")
         
-        self.setGeometry(870, 400, 300, 300)
+        #Gets the primary screen
+        screen = QtWidgets.QApplication.screens()[0]
+
+        #Calculates the position to show the window
+        position_x = int(screen.size().width() * 0.65)
+        position_y = int(screen.size().width() * 0.20)
+
+        #Calculates the size of the window
+        width_percent = int(screen.size().width() * 0.14)
+        height_percent = int(screen.size().height() * 0.30)
         
+        #Sets the position and size of the window
+        self.setGeometry(position_x, position_y, width_percent, height_percent)
+
         #Creates the main layout and sets it
         processes_layout = QVBoxLayout()
         self.setLayout(processes_layout)
@@ -580,9 +620,6 @@ class ProcessKiler(QThread):
         new_background_processes = set()
         for process in psutil.process_iter(['name']):
             new_background_processes.add(process.info['name'])
-
-            #Compares the sets of processes to find which are new
-            added: set = new_background_processes ^ background_processes
 
             for proc in psutil.process_iter(['name']):
                 try:
