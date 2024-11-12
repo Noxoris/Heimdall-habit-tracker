@@ -1,4 +1,4 @@
-### Heimdall - habit tracker
+## Heimdall - habit tracker
 
 Heimdall is a habit tracker software with a feature to block sites and software chosen by the user, before all habits for the day are marked as completed. Most of the code is written in Python, the GUI uses PySide6 framework and the browser addon to block sites will be written in JavaScript. When completed, it will be deployed to an .exe file to simplify usage for the end user.
 
@@ -10,7 +10,7 @@ Currently work in progress, the main features missing are:
 - Saving data inserted
 - Settings tab
 
-### Planned
+### Planned features
 
 - Blocking of software and websites
 - Custom date formats
@@ -75,8 +75,10 @@ Currently not implemented.
 ### Credits
 
 Thank you to:
-https://commons.wikimedia.org/ for free to use icons, that were used in this project.
+https://commons.wikimedia.org/ for free to use icons, that were used in this project. 
+
 https://doc.qt.io/qtforpython-6/ for documentation on PyQt6/PySide6 without which the work would be much harder.
+
 https://www.pythonguis.com/ for great tutorials on using PyQt6/PySide6.
 
 ### License (will change!)
