@@ -2,7 +2,7 @@ import sys, psutil, ctypes
 from PySide6 import QtCore,QtGui, QtWidgets
 from PySide6.QtWidgets import (QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QWidget, QDialog, QLineEdit)
 from PySide6.QtCore import Slot, Signal, Qt, QThread
-from datetime import date
+from datetime import date, datetime, timezone
 from icoextract import IconExtractor
 from PIL import Image
 from time import sleep
@@ -12,6 +12,7 @@ from io import BytesIO
 current_dir = getcwd()
 
 #TODO 
+#add exporting last_occurrance to prevent starting at each running of the program
 #change the window size and position to current monitor
 #create an update class to reuse the code
 #custom window for error messages
@@ -648,6 +649,59 @@ class MessageWindow(QtWidgets.QMainWindow):
         if button == QMessageBox.StandardButton.Ok:
             print("OK!")
 
+class NewDay(QThread):
+    stopped = Signal()
+    
+    def __init__(self):
+        super().__init__()
+
+    #Sets to last occurrance to the 1 january 1970, so it will always be before current date.
+    last_occurrence = datetime.min.replace(tzinfo=timezone.utc)
+
+    #Sets the hour of new day
+    new_day_hour = 1
+
+    def NewDayCheck(self):
+        
+        #Gets current time and replaces hour with custom hour of the day
+        now = datetime.now(timezone.utc)
+        target_time = now.replace(hour=self.new_day_hour, minute=0, second=0)
+
+        #Checks if the time is greater than or equal to the set time of new day
+        if now >= target_time:
+
+            #Sets the last occurrance to the current date
+            current_date = now.date()
+            last_occurence_date = self.last_occurrence.date()
+
+            #Tldr; checks if the new cycle should begin. Checks if the day had changed since the last occurrance or the date is the same, but time is later than the last occurrence time
+            if current_date > last_occurence_date or (current_date == last_occurence_date and now > self.last_occurrence):
+                self.NewDayCycle()
+                self.update_last_occurrence(now)
+
+    #Updates the last occurrence to the set hour of new day and current day. 
+    def update_last_occurrence(self, time):
+        self.last_occurrence = time.replace(hour=self.new_day_hour, minute=0, second=0)
+
+    def NewDayCycle(self):
+        for habit_list in habits_data:
+
+            #If the completion is True, then adds +1 to the streak counter, and sets the completion as False.
+            if habit_list[1]:
+                habit_list[2] += 1
+                habit_list[1] = False
+
+            #Otherwise simply resets streak counter
+            else:
+                habit_list[2] = 0
+        self.day_checked = 1
+
+    #Runs the loop checking for the new day every 60 seconds
+    def run(self):
+        while True:
+            self.NewDayCheck()
+            sleep(60)
+
 #Testing values    
 programs_data = [['TEST', 'AIMP.exe', False]]
 habits_data = [
@@ -665,6 +719,11 @@ if __name__ == '__main__':
     killing_thread = ProcessKiler()
     killing_thread.finished.connect(app.exit)
     killing_thread.start()
+
+    #Starts the day cycle thread with the main program
+    new_day_thread = NewDay()
+    new_day_thread.finished.connect(app.exit)
+    new_day_thread.start()
 
     window = HeimdallWindow()
     window.show()
