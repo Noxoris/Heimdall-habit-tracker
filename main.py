@@ -2,25 +2,131 @@ import sys, psutil, ctypes
 from PySide6 import QtCore,QtGui, QtWidgets
 from PySide6.QtWidgets import (QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QWidget, QDialog, QLineEdit)
 from PySide6.QtCore import Slot, Signal, Qt, QThread
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from icoextract import IconExtractor
 from PIL import Image
 from time import sleep
-from os import getcwd
+from os import getcwd, remove
 from io import BytesIO
+import json
+
 
 current_dir = getcwd()
 
 #TODO 
-#add exporting last_occurrance to prevent starting at each running of the program
+#add exporting last_cycle to prevent starting at each running of the program
 #change the window size and position to current monitor
 #create an update class to reuse the code
 #custom window for error messages
 #Fix the line self.program_name.setText("Detecting now, please start the app you want to add.") not updating displayed message
+#Fix lastcycle not exporting
 #Ignore program button to the programs tab
 #make a function to reuse geometry (?)
 #only an icon in the boolean field, or a yes/no besides
   
+class ExportImport():
+    
+    #Removes the json file 
+    def delete_file(file_name):
+        try:
+            remove(f"{file_name}.json")
+        except FileNotFoundError:
+            pass
+    
+    #If it exists, loads data from json file
+    def get_data(file_name):
+        try:
+            return ExportImport.import_json(file_name)
+        
+        except FileNotFoundError:
+            return []
+
+    def export_json(name, table):
+
+        formatted_table = []
+        for row in table:
+            formatted_row = []
+            for item in row:
+
+                #Checks for date, and converts it into an isoformat, that the json supports
+                if isinstance(item, date):
+                    formatted_item = item.isoformat() 
+                
+                #Checks for int, and leaves it's normal value
+                elif isinstance(item, int):
+                    formatted_item = item
+
+                #Otherwise converts the item into string, to ensure compability with json
+                else:
+                    formatted_item = str(item)
+
+            #Adds items to rows, and rows to the table
+                formatted_row.append(formatted_item)
+            formatted_table.append(formatted_row)
+        
+        #Creates a dictionary with the name from the function call
+        data_dict = {name: formatted_table}
+
+        #Adds it into the json object
+        json_object = json.dumps(data_dict, indent=4) 
+
+        #Exports the json object into a json file
+        with open(f"{name}.json", "w") as export_json:
+            export_json.write(json_object)
+
+    def import_json(name):
+        with open(f"{name}.json", "r") as import_json:
+            json_object = json.load(import_json)
+
+        new_list = json_object.get(name, [])
+        
+        converted_list = []
+
+        for row in new_list:
+            converted_row = []
+            for i, item in enumerate(row):
+
+                #Checks if the item was date or datetime object before exporting
+                if isinstance(item, str) and item.startswith("20"):
+
+                    #Tries to create a date object from the string in isoformat
+                    try:
+                        converted_item = date.fromisoformat(item)
+
+                    #If it throws ValueError, then the string must be in datetime format, so it creates the datetime object instead
+                    except ValueError:
+                        converted_item = datetime.fromisoformat(item)
+
+                #Checks if the value is a string that was QLabel object before exporting
+                elif isinstance(item, str) and item.startswith("<PySide6.QtWidgets.QLabel"):
+                    
+                    #Gets the program name from the next item
+                    program_name = row[i+1]
+
+                    #Creates a QLabel from the icon exported earlier and adds it as the item to return
+                    label = QLabel()
+                    pixmap = QtGui.QPixmap(rf"{current_dir}/data/icons/programs/{program_name}.png")
+                    label.setPixmap(pixmap)
+                    converted_item = label
+
+                else:
+                    converted_item = item
+
+            #Adds items to rows, and rows to list
+                converted_row.append(converted_item)
+            converted_list.append(converted_row)
+        return converted_list
+
+#Imports saved data
+habits_data = ExportImport.get_data("habits")
+currently_blocked = ExportImport.get_data("blocked")
+
+#Imports an empty list, because generating icons from images doesn't work before starting QApplication
+programs_data = []
+
+#Imports last day cycle datetime
+last_cycle_table = ExportImport.get_data("lastcycle")
+
 #Main window class.
 class HeimdallWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -155,9 +261,15 @@ class HeimdallWindow(QtWidgets.QMainWindow):
 
                 #Adds the programs toggled as "blocked" to the list of blocked programs
                 if new_value == True and programs_data[row][1] not in currently_blocked:
-                    currently_blocked.append(programs_data[row][1])
+                    currently_blocked.append([programs_data[row][1]])
+
+                    #Updates the json file
+                    ExportImport.export_json("blocked", currently_blocked)
                 else:
                     currently_blocked.remove(programs_data[row][1])
+
+                    #Updates the json file
+                    ExportImport.export_json("blocked", currently_blocked)
 
     #Functions to display windows used in adding values to the tables
     def show_add_habit(self):
@@ -267,6 +379,8 @@ class AddHabitDialog(QDialog):
         start_date = date.today()
         habits_data.append([habit_name, False, 0, start_date])
 
+        #Updates the json file
+        ExportImport.export_json("habits", habits_data)
         #Updates display after appending new values
         self.parent().habits_model.update_row(len(habits_data) - 1)
 
@@ -458,6 +572,9 @@ class DetectProgramWindow(QWidget):
     def append_progam(self):
         if self.program_to_add not in programs_data:  
             programs_data.append([self.label, self.program_to_add, False])
+
+            #Updates the json file
+            ExportImport.export_json("programs", programs_data)
             self.parent.programs_model.update_row(len(programs_data) - 1)
         else:
             ctypes.windll.user32.MessageBoxW(0, f"The {self.program_to_add} is already added. ", "Adding program", 0x40000)
@@ -587,7 +704,6 @@ class CurrentProcesses(QtCore.QAbstractTableModel):
                 return cell_value.pixmap()
 
     def refresh_list(self):
-        print(f"Refresh: {self.initialized}")
         self.initialized = False
         self._data = self.now_running()
         
@@ -655,8 +771,16 @@ class NewDay(QThread):
     def __init__(self):
         super().__init__()
 
-    #Sets to last occurrance to the 1 january 1970, so it will always be before current date.
-    last_occurrence = datetime.min.replace(tzinfo=timezone.utc)
+    #Checks if the table is empty, meaning the data was not loaded from json
+    if last_cycle_table == []:
+        
+    #Sets the last cycle to the 1 january 1970, so it will always be before current date.
+        last_cycle = datetime.min
+    
+    #Otherwise gets the value from the loaded data
+    else:
+        last_cycle = last_cycle_table[0]
+        last_cycle = last_cycle[0]
 
     #Sets the hour of new day
     new_day_hour = 1
@@ -664,24 +788,31 @@ class NewDay(QThread):
     def NewDayCheck(self):
         
         #Gets current time and replaces hour with custom hour of the day
-        now = datetime.now(timezone.utc)
+        now = datetime.now()
         target_time = now.replace(hour=self.new_day_hour, minute=0, second=0)
 
         #Checks if the time is greater than or equal to the set time of new day
         if now >= target_time:
 
-            #Sets the last occurrance to the current date
+            #Sets the last cycle to the current date
             current_date = now.date()
-            last_occurence_date = self.last_occurrence.date()
+            last_cycle_date = self.last_cycle.date()
 
-            #Tldr; checks if the new cycle should begin. Checks if the day had changed since the last occurrance or the date is the same, but time is later than the last occurrence time
-            if current_date > last_occurence_date or (current_date == last_occurence_date and now > self.last_occurrence):
+            #Tldr; checks if the new cycle should begin. Checks if the day had changed since the last cycle or the date is the same, but time is later than the last occurrence time
+            if current_date > last_cycle_date or (current_date == last_cycle_date and now > self.last_cycle):
                 self.NewDayCycle()
-                self.update_last_occurrence(now)
+                self.update_last_cycle(now)
 
-    #Updates the last occurrence to the set hour of new day and current day. 
-    def update_last_occurrence(self, time):
-        self.last_occurrence = time.replace(hour=self.new_day_hour, minute=0, second=0)
+    #Updates the last cycle to the set hour of new day and current day. 
+    def update_last_cycle(self, time):
+        self.last_cycle = time.replace(hour=self.new_day_hour, minute=0, second=0)
+        last_cycle_table.append([self.last_cycle])
+
+        #Deletes the json file, to prevent importing more than one last cycle datetime
+        ExportImport.delete_file("lastcycle")    
+
+        #Not working
+        ExportImport.export_json("lastcycle", last_cycle_table)
 
     def NewDayCycle(self):
         for habit_list in habits_data:
@@ -689,12 +820,14 @@ class NewDay(QThread):
             #If the completion is True, then adds +1 to the streak counter, and sets the completion as False.
             if habit_list[1]:
                 habit_list[2] += 1
-                habit_list[1] = False
+                habit_list[1] = False             
 
             #Otherwise simply resets streak counter
             else:
                 habit_list[2] = 0
-        self.day_checked = 1
+            
+            #Updates the exported habits
+            ExportImport.export_json("habits",habits_data)
 
     #Runs the loop checking for the new day every 60 seconds
     def run(self):
@@ -702,18 +835,12 @@ class NewDay(QThread):
             self.NewDayCheck()
             sleep(60)
 
-#Testing values    
-programs_data = [['TEST', 'AIMP.exe', False]]
-habits_data = [
-    ["Reading", False, 9, date(2021,11,1)],
-    ["Watching",False, 0, date(2017,10,1)],
-    ["Programming",False, 8, date(2017,10,1)],
-]
-currently_blocked = ['AIMP.exe']
-
 #Initializes the program        
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
+
+    #Imports the programs data, after the QApplication was initialized
+    programs_data = ExportImport.get_data("programs")
 
     #Starts the killing processes thread with the main program
     killing_thread = ProcessKiler()
