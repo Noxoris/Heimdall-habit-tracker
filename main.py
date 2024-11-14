@@ -30,6 +30,7 @@ class ExportImport():
     def delete_file(file_name):
         try:
             remove(f"{file_name}.json")
+
         except FileNotFoundError:
             pass
     
@@ -783,7 +784,7 @@ class NewDay(QThread):
         last_cycle = last_cycle[0]
 
     #Sets the hour of new day
-    new_day_hour = 1
+    new_day_hour = 0
 
     def NewDayCheck(self):
         
@@ -793,7 +794,6 @@ class NewDay(QThread):
 
         #Checks if the time is greater than or equal to the set time of new day
         if now >= target_time:
-
             #Sets the last cycle to the current date
             current_date = now.date()
             last_cycle_date = self.last_cycle.date()
@@ -806,12 +806,12 @@ class NewDay(QThread):
     #Updates the last cycle to the set hour of new day and current day. 
     def update_last_cycle(self, time):
         self.last_cycle = time.replace(hour=self.new_day_hour, minute=0, second=0)
+
+        #Clears the table to make sure there is only one last_cycle date
+        last_cycle_table = []
         last_cycle_table.append([self.last_cycle])
 
-        #Deletes the json file, to prevent importing more than one last cycle datetime
-        ExportImport.delete_file("lastcycle")    
-
-        #Not working
+        #Exports the newest last cycle date to a json file
         ExportImport.export_json("lastcycle", last_cycle_table)
 
     def NewDayCycle(self):
