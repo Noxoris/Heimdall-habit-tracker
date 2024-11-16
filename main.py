@@ -14,12 +14,10 @@ import json
 current_dir = getcwd()
 
 #TODO 
-#add exporting last_cycle to prevent starting at each running of the program
 #change the window size and position to current monitor
 #create an update class to reuse the code
 #custom window for error messages
 #Fix the line self.program_name.setText("Detecting now, please start the app you want to add.") not updating displayed message
-#Fix lastcycle not exporting
 #Ignore program button to the programs tab
 #make a function to reuse geometry (?)
 #only an icon in the boolean field, or a yes/no besides
@@ -513,21 +511,23 @@ class DetectProgramWindow(QWidget):
         self.detect_button.clicked.connect(self.detect_processes)
         self.append_button = QPushButton("Add to the table")
         self.append_button.clicked.connect(self.append_progam)
+        self.ignore_button = QPushButton("Ignore program")
+        self.ignore_button.clicked.connect(self.ignore_program)
     
         #Creates a layout and adds buttons to it
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.detect_button)
         button_layout.addWidget(self.append_button)
+        button_layout.addWidget(self.ignore_button)
         window_layout.addLayout(button_layout)
 
         #Sets layout of the buttons
         self.setLayout(button_layout)
-
+        
     program_to_add = None     
-
+    
     @Slot()
     def detect_processes(self):
-
         #Detecting all processes in the background and creating a set with only their names and file name
         old_processes:set = set()
         for process in psutil.process_iter(['name', 'exe']):
@@ -540,7 +540,6 @@ class DetectProgramWindow(QWidget):
         
         #Scans for the first started process that is not on the excluded list
         while counter < 1:
-            self.program_name.setText("Detecting now, please start the app you want to add.")
             new_processes = set()
             for process in psutil.process_iter(['name', 'exe']):
                 new_processes.add((process.info['name'], process.info['exe']))
@@ -571,15 +570,22 @@ class DetectProgramWindow(QWidget):
 
     #Adds the program to the programs table
     def append_progam(self):
-        if self.program_to_add not in programs_data:  
-            programs_data.append([self.label, self.program_to_add, False])
+        #Prevents adding blank rows
+        if self.program_to_add != None:
+            if self.program_to_add not in programs_data:  
+                programs_data.append([self.label, self.program_to_add, False])
 
-            #Updates the json file
-            ExportImport.export_json("programs", programs_data)
-            self.parent.programs_model.update_row(len(programs_data) - 1)
+                #Updates the json file
+                ExportImport.export_json("programs", programs_data)
+                self.parent.programs_model.update_row(len(programs_data) - 1)
+            else:
+                ctypes.windll.user32.MessageBoxW(0, f"The {self.program_to_add} is already added. ", "Adding program", 0x40000)
         else:
-            ctypes.windll.user32.MessageBoxW(0, f"The {self.program_to_add} is already added. ", "Adding program", 0x40000)
+            self.program_name.setText(f"No program to add.")
 
+    def ignore_program(self):
+        self.program_to_add = None
+        self.program_name = QLabel("No program detected", alignment=Qt.AlignCenter)
 #Adds programs to the list based on list of all running programs.
 class ProgramsListWindow(QWidget):
     
